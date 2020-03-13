@@ -1,20 +1,20 @@
 package ui;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
-import android.provider.MediaStore;
+import android.os.Environment;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.example.documentconverter.R;
@@ -22,134 +22,119 @@ import com.example.documentconverter.R;
 import com.itextpdf.text.*;
 import com.itextpdf.text.pdf.*;
 
-import org.apache.poi.hssf.usermodel.HSSFSheet;
-import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.*;
-
+import org.apache.poi.xssf.usermodel.XSSFSheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 
 import java.io.*;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.Iterator;
 
-import presenter.MainPresenter;
-
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
+    public static final String TAG = MainActivity.class.getSimpleName();
 
     private Button browseButton;
-    private MainPresenter mPresenter;
+    private TextView sourceFileName;
 
     //Uri to store the image uri
-    private Uri filePath;
+    private Uri sourceUri;
 
-    private int PICK_IMAGE_REQUEST = 1;
+    private int PICK_XLS_REQUEST = 1;
 
     //storage permission code
-    private static final int STORAGE_PERMISSION_CODE = 123;
+    private static final int STORAGE_PERMISSION_CODE = 100;
+    private static final int STORAGE_WRITE_PERMISSION_CODE = 200;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        browseButton = (Button)findViewById(R.id.select_button);
+        browseButton = findViewById(R.id.select_button);
+        sourceFileName = findViewById(R.id.source_file_name);
         browseButton.setOnClickListener(this);
-
     }
 
     private void browseDirectory() {
-        Log.d("MainActivity", "BrowseDirectory");
+        Log.d(TAG, "BrowseDirectory");
         Intent intent = new Intent();
         intent.setType("application/*");
         intent.setAction(Intent.ACTION_GET_CONTENT);
-        startActivityForResult(Intent.createChooser(intent, "Select Document"), PICK_IMAGE_REQUEST);
+        String state = Environment.getExternalStorageState();
+        if (Environment.MEDIA_MOUNTED.equals(state)) {
+            if (Build.VERSION.SDK_INT >= 23) {
+                if (checkReadPermission()) {
+                    startActivityForResult(Intent.createChooser(intent, "Select Document"), PICK_XLS_REQUEST);
+                } else {
+                    requestReadPermission();
+                }
+            }
+        }
+
+
     }
 
     @Override
     public void onClick(View v) {
         browseDirectory();
-
-    }
-
-    //Requesting permission
-    private void requestStoragePermission() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED)
-            return;
-
-        if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.READ_EXTERNAL_STORAGE)) {
-            //If the user has denied the permission previously your code will come to this block
-            //Here you can explain why you need this permission
-            //Explain here why you need this permission
-        }
-        //And finally ask for the permission
-        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, STORAGE_PERMISSION_CODE);
-    }
-
-
-    //This method will be called when the user will tap on allow or deny
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-
-        //Checking the request code of our request
-        if (requestCode == STORAGE_PERMISSION_CODE) {
-
-            //If permission is granted
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                //Displaying a toast
-                Toast.makeText(this, "Permission granted now you can read the storage", Toast.LENGTH_LONG).show();
-            } else {
-                //Displaying another toast if permission is not granted
-                Toast.makeText(this, "Oops you just denied the permission", Toast.LENGTH_LONG).show();
-            }
-        }
     }
 
     private void convertToPdf(String path) {
         try {
+            File storageDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
             FileInputStream input_document = new FileInputStream(new File(path));
             // Read workbook into HSSFWorkbook
-            HSSFWorkbook my_xls_workbook = new HSSFWorkbook(input_document);
+            XSSFWorkbook my_xls_workbook = new XSSFWorkbook(input_document);
+            // HSSFWorkbook my_xls_workbook = new HSSFWorkbook(input_document);
             // Read worksheet into HSSFSheet
-            HSSFSheet my_worksheet = my_xls_workbook.getSheetAt(0);
+            XSSFSheet my_worksheet = my_xls_workbook.getSheetAt(0);
+            // HSSFSheet my_worksheet = my_xls_workbook.getSheetAt(0);
             // To iterate over the rows
             Iterator<Row> rowIterator = my_worksheet.iterator();
             //We will create output PDF document objects at this point
             Document iText_xls_2_pdf = new Document();
-            PdfWriter.getInstance(iText_xls_2_pdf, new FileOutputStream("Excel2PDF_Output.pdf"));
-            iText_xls_2_pdf.open();
-            //we have two columns in the Excel sheet, so we create a PDF table with two columns
-            //Note: There are ways to make this dynamic in nature, if you want to.
-            PdfPTable my_table = new PdfPTable(2);
-            //We will use the object below to dynamically add new data to the table
-            PdfPCell table_cell;
-            //Loop through rows.
-            while (rowIterator.hasNext()) {
-                Row row = rowIterator.next();
-                Iterator<Cell> cellIterator = row.cellIterator();
-                while (cellIterator.hasNext()) {
-                    Cell cell = cellIterator.next(); //Fetch CELL
-                    switch (cell.getCellType()) { //Identify CELL type
-                        //you need to add more code here based on
-                        //your requirement / transformations
-                        case Cell.CELL_TYPE_STRING:
-                            //Push the data from Excel to PDF Cell
-                            table_cell = new PdfPCell(new Phrase(cell.getStringCellValue()));
-                            //feel free to move the code below to suit to your needs
-                            my_table.addCell(table_cell);
-                            break;
+            if (checkWritePermission()) {
+                String outFilePath = storageDir + "/Excel_To_PDF_Output.pdf";
+                PdfWriter.getInstance(iText_xls_2_pdf, new FileOutputStream(outFilePath));
+                iText_xls_2_pdf.open();
+                //we have two columns in the Excel sheet, so we create a PDF table with two columns
+                PdfPTable my_table = new PdfPTable(32);
+                //We will use the object below to dynamically add new data to the table
+                PdfPCell table_cell;
+                //Loop through rows.
+
+                while (rowIterator.hasNext()) {
+                    Row row = rowIterator.next();
+                    Iterator<Cell> cellIterator = row.cellIterator();
+                    while (cellIterator.hasNext()) {
+                        Cell cell = cellIterator.next(); //Fetch CELL
+                        switch (cell.getCellType()) { //Identify CELL type
+                            //you need to add more code here based on
+                            //your requirement / transformations
+                            case Cell.CELL_TYPE_STRING:
+                                //Push the data from Excel to PDF Cell
+                                table_cell = new PdfPCell(new Phrase(cell.getStringCellValue()));
+
+                                //feel free to move the code below to suit to your needs
+                                my_table.addCell(table_cell);
+                                break;
+                        }
+                        //next line
                     }
-                    //next line
+
                 }
 
+                //Finally add the table to PDF document
+                iText_xls_2_pdf.add(my_table);
+                iText_xls_2_pdf.close();
+                //we created our pdf file..
+                input_document.close(); //close xls
+            } else {
+                requestWritePermission();
             }
-            //Finally add the table to PDF document
-            iText_xls_2_pdf.add(my_table);
-            iText_xls_2_pdf.close();
-            //we created our pdf file..
-            input_document.close(); //close xls
         } catch (Exception e) {
-            Log.d("Exception =", e.getMessage());
+            Log.d(TAG, e.getMessage());
         }
 
 
@@ -159,15 +144,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (requestCode == PICK_IMAGE_REQUEST && resultCode == RESULT_OK && data != null && data.getData() != null) {
-            filePath = data.getData();
-            Log.d("MainActivity FilePath=", filePath.getPath());
-
-                convertToPdf(filePath.getPath());
-                //bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), filePath);
-                //imageView.setImageBitmap(bitmap);
-
-
+        if (requestCode == PICK_XLS_REQUEST && resultCode == RESULT_OK && data != null && data.getData() != null) {
+            sourceUri = data.getData();
+            Log.d(TAG, sourceUri.getPath());
+            String filename = getPath(sourceUri);
+            sourceFileName.setText(filename.substring(filename.lastIndexOf("/") + 1));
+            // convertToPdf(getPath(sourceUri));
         }
     }
 
@@ -178,14 +160,69 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         String document_id = cursor.getString(0);
         document_id = document_id.substring(document_id.lastIndexOf(":") + 1);
         cursor.close();
-
-        cursor = getContentResolver().query(
+        /*cursor = getContentResolver().query(
                 android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                 null, MediaStore.Images.Media._ID + " = ? ", new String[]{document_id}, null);
         cursor.moveToFirst();
         String path = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
         cursor.close();
-
-        return path;
+*/
+        return document_id;
     }
+
+    private boolean checkReadPermission() {
+        int result = ContextCompat.checkSelfPermission(MainActivity.this, android.Manifest.permission.READ_EXTERNAL_STORAGE);
+        if (result == PackageManager.PERMISSION_GRANTED)
+            return true;
+        else
+            return false;
+    }
+
+    private boolean checkWritePermission() {
+        int result = ContextCompat.checkSelfPermission(MainActivity.this, android.Manifest.permission.WRITE_EXTERNAL_STORAGE);
+
+        if (result == PackageManager.PERMISSION_GRANTED)
+            return true;
+        else
+            return false;
+    }
+
+    private void requestReadPermission() {
+
+        if (ActivityCompat.shouldShowRequestPermissionRationale(MainActivity.this, android.Manifest.permission.READ_EXTERNAL_STORAGE)) {
+            Toast.makeText(MainActivity.this, "Read External Storage permission allows us to read files. Please allow this permission in App Settings.", Toast.LENGTH_LONG).show();
+        } else {
+            ActivityCompat.requestPermissions(MainActivity.this, new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE}, STORAGE_PERMISSION_CODE);
+        }
+    }
+
+    private void requestWritePermission() {
+
+        if (ActivityCompat.shouldShowRequestPermissionRationale(MainActivity.this, android.Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+            Toast.makeText(MainActivity.this, "Write External Storage permission allows us to write files. Please allow this permission in App Settings.", Toast.LENGTH_LONG).show();
+        } else {
+            ActivityCompat.requestPermissions(MainActivity.this, new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE,}, STORAGE_WRITE_PERMISSION_CODE);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
+        switch (requestCode) {
+            case STORAGE_PERMISSION_CODE:
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    Log.e(TAG, "Permission Granted, Now you can use local drive .");
+                } else {
+                    Log.e(TAG, "Permission Denied, You cannot use local drive .");
+                }
+                break;
+            case STORAGE_WRITE_PERMISSION_CODE:
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    Log.e(TAG, "Permission Granted, Now you can write local drive .");
+                } else {
+                    Log.e(TAG, "Permission Denied, You cannot write local drive .");
+                }
+                break;
+        }
+    }
+
 }

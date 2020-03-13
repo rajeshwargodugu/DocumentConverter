@@ -10,6 +10,7 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        multiDexEnabled true
     }
     buildTypes {
         release {
@@ -26,10 +27,11 @@ dependencies {
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'androidx.test.ext:junit:1.1.0'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.1.1'
-    implementation "org.apache.poi:poi:3.17"
-    implementation "org.apache.poi:poi-ooxml:3.17"
+    implementation 'com.android.support:multidex:1.0.1'
+    //implementation "org.apache.poi:poi:3.17"
+    //implementation "org.apache.poi:poi-ooxml:3.17"
     implementation group: 'com.itextpdf', name: 'itextpdf', version: '5.3.4'
-    configurations.all {
+ /*   configurations.all {
         resolutionStrategy.eachDependency { DependencyResolveDetails details ->
             def requested = details.requested
             if (requested.group == "androidx") {
@@ -38,5 +40,5 @@ dependencies {
                 }
             }
         }
-    }
+    }*/
 }
