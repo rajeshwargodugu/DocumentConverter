@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">DocumentConverter</string>
+    <string name="app_name">Document Converter</string>
     <string name="app_text">DocumentConverter</string>
     <string name="select_file">SELECT FILE</string>
 </resources>
